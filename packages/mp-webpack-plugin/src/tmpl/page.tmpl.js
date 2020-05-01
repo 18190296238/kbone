@@ -21,8 +21,11 @@ function dealWithPage(evt, window, value) {
         console.error(`page not found: ${evt.url}`)
     } else if (value !== 'none') {
         const targeturl = `${window.location.origin}/redirect?url=${encodeURIComponent(url)}`
-        const options = {url: `/pages/${value}/index?type=${type}&targeturl=${encodeURIComponent(targeturl)}`}
-        if (window.$$miniprogram.isTabBarPage(`/pages/${value}/index`)) wx.switchTab(options)
+        const subpackagesMap = window.$$miniprogram.subpackagesMap
+        const packageName = subpackagesMap[value]
+        const pageRoute = `/${packageName ? packageName + '/' : ''}pages/${value}/index`
+        const options = {url: `${pageRoute}?type=${type}&targeturl=${encodeURIComponent(targeturl)}`}
+        if (window.$$miniprogram.isTabBarPage(pageRoute)) wx.switchTab(options)
         else if (type === 'jump') wx.redirectTo(options)
         else if (type === 'open') wx.navigateTo(options)
     }
@@ -72,7 +75,9 @@ Page({
 
         if (query.type === 'open' || query.type === 'jump' || query.type === 'share') {
             // 处理页面参数，只有当页面是其他页面打开或跳转时才处理
-            this.window.$$miniprogram.init(query.targeturl ? decodeURIComponent(query.targeturl) : null)
+            let targetUrl = decodeURIComponent(query.targeturl)
+            targetUrl = targetUrl.indexOf('://') >= 0 ? targetUrl : (config.origin + targetUrl)
+            this.window.$$miniprogram.init(targetUrl || null)
 
             if (query.search) this.window.location.search = decodeURIComponent(query.search)
             if (query.hash) this.window.location.hash = decodeURIComponent(query.hash)
@@ -116,6 +121,12 @@ Page({
         // 处理 intersectionObserver 获取
         this.window.$$createIntersectionObserver = options => wx.createIntersectionObserver(this, options)
 
+        // 处理 openerEventChannel 获取
+        this.window.$$getOpenerEventChannel = () => this.getOpenerEventChannel()
+
+        // 初始化页面显示状态
+        this.document.$$visibilityState = 'prerender'
+
         init(this.window, this.document)
         this.setData({
             pageId: this.pageId
@@ -130,7 +141,9 @@ Page({
             window: this.window,
             document: this.document,
         }
+        this.document.$$visibilityState = 'visible'
         this.window.$$trigger('wxshow')
+        this.document.$$trigger('visibilitychange')
     },
     onReady() {
         if (this.pageConfig.loadingText) wx.hideLoading()
@@ -138,13 +151,17 @@ Page({
     },
     onHide() {
         global.$$runtime = null
+        this.document.$$visibilityState = 'hidden'
         this.window.$$trigger('wxhide')
+        this.document.$$trigger('visibilitychange')
     },
     onUnload() {
+        this.document.$$visibilityState = 'unloaded'
         this.window.$$trigger('beforeunload')
         this.window.$$trigger('wxunload')
         if (this.app && this.app.$destroy) this.app.$destroy()
         this.document.body.$$recycle() // 回收 dom 节点
+        this.window.$$destroy()
 
         mp.destroyPage(this.pageId)
         global.$$runtime = null
@@ -158,19 +175,25 @@ Page({
         this.query = null
     },
     onShareAppMessage(data) {
-        if (this.window.onShareAppMessage) {
-            const shareOptions = Object.assign({}, this.window.onShareAppMessage(data))
+        const window = this.window
+        if (window && window.onShareAppMessage) {
+            const shareOptions = Object.assign({}, window.onShareAppMessage(data))
 
             if (shareOptions.miniprogramPath) {
                 shareOptions.path = shareOptions.miniprogramPath
             } else {
                 const query = Object.assign({}, this.query || {})
+                let route = this.route
 
                 if (shareOptions.path) {
+                    shareOptions.path = shareOptions.path[0] === '/' ? window.location.origin + shareOptions.path : shareOptions.path
+                    const {pathname} = window.location.constructor.$$parse(shareOptions.path)
+                    const matchRoute = window.$$miniprogram.getMatchRoute(pathname || '/')
+                    if (matchRoute) route = matchRoute
                     query.targeturl = encodeURIComponent(shareOptions.path)
                 } else {
                     // 组装当前页面路径
-                    const location = this.window.location
+                    const location = window.location
 
                     query.targeturl = encodeURIComponent(location.href)
                     query.search = encodeURIComponent(location.search)
@@ -179,7 +202,7 @@ Page({
 
                 query.type = 'share'
                 const queryString = Object.keys(query).map(key => `${key}=${query[key] || ''}`).join('&')
-                const currentPagePath = `${this.route}?${queryString}`
+                const currentPagePath = `${route}?${queryString}`
                 shareOptions.path = currentPagePath
             }
 

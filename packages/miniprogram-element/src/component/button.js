@@ -10,7 +10,8 @@ module.exports = {
     }, {
         name: 'type',
         get(domNode) {
-            return domNode.getAttribute('type') || 'default'
+            // 如果使用默认值 default，基础库中会补充 wx-button[type=default]，导致部分样式优先级处理有问题
+            return domNode.getAttribute('type') || undefined
         },
     }, {
         name: 'plain',
@@ -102,27 +103,27 @@ module.exports = {
     }],
     handles: {
         onButtonGetUserInfo(evt) {
-            this.callSimpleEvent('getuserinfo', evt)
+            this.callSingleEvent('getuserinfo', evt)
         },
 
         onButtonContact(evt) {
-            this.callSimpleEvent('contact', evt)
+            this.callSingleEvent('contact', evt)
         },
 
         onButtonGetPhoneNumber(evt) {
-            this.callSimpleEvent('getphonenumber', evt)
+            this.callSingleEvent('getphonenumber', evt)
         },
 
         onButtonError(evt) {
-            this.callSimpleEvent('error', evt)
+            this.callSingleEvent('error', evt)
         },
 
         onButtonOpenSetting(evt) {
-            this.callSimpleEvent('opensetting', evt)
+            this.callSingleEvent('opensetting', evt)
         },
 
         onButtonLaunchApp(evt) {
-            this.callSimpleEvent('launchapp', evt)
+            this.callSingleEvent('launchapp', evt)
         },
 
     },

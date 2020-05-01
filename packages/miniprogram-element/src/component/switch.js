@@ -4,6 +4,7 @@
 module.exports = {
     properties: [{
         name: 'checked',
+        canBeUserChanged: true,
         get(domNode) {
             return !!domNode.getAttribute('checked')
         },
@@ -28,8 +29,13 @@ module.exports = {
             const domNode = this.getDomNodeFromEvt(evt)
             if (!domNode) return
 
-            domNode.setAttribute('checked', evt.detail.value)
-            this.callSimpleEvent('change', evt)
+            domNode.$$setAttributeWithoutUpdate('checked', evt.detail.value)
+
+            // 可被用户行为改变的值，需要记录
+            domNode._oldValues = domNode._oldValues || {}
+            domNode._oldValues.checked = evt.detail.value
+
+            this.callSingleEvent('change', evt)
         },
     },
 }

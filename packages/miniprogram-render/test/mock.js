@@ -135,7 +135,39 @@ global.wx = {
             }
         }, 10)
     },
+    request(options) {
+        expect(options.url).toBe(global.testXHRData.url)
+        expect(options.header).toEqual(global.testXHRData.header)
+        expect(options.method).toBe(global.testXHRData.method)
+        expect(options.dataType).toBe(global.testXHRData.dataType)
+        expect(options.responseType).toBe(global.testXHRData.responseType)
+
+        const success = options.success
+        const fail = options.fail
+        const complete = options.complete
+
+        if (global.testXHRData.res === 'fail') {
+            fail({
+                errMsg: 'some error',
+            })
+            complete()
+        } else if (global.testXHRData.res === 'timeout') {
+            // ignore
+        } else {
+            success({
+                data: global.testXHRData.data,
+                statusCode: 200,
+                header: {
+                    'Content-Type': 'application/javascript',
+                },
+            })
+            complete()
+        }
+    },
 }
+
+const currentPages = []
+global.getCurrentPages = () => currentPages
 
 module.exports = {
     html,
@@ -146,6 +178,7 @@ module.exports = {
         res.window.$$miniprogram.init(realUrl)
         res.document.body.innerHTML = html
 
+        currentPages.push(res)
         return res
     },
     async sleep(time) {

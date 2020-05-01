@@ -35,7 +35,9 @@ const WX_COMPONENT_LIST = [
     'audio', 'camera', 'image', 'live-player', 'live-pusher', 'video',
     'map',
     'canvas',
-    'ad', 'official-account', 'open-data', 'web-view'
+    'ad', 'official-account', 'open-data', 'web-view',
+    // 特殊补充
+    'capture', 'catch', 'animation'
 ]
 WX_COMPONENT_LIST.forEach(name => WX_COMPONENT_MAP[name] = name)
 let WX_CUSTOM_COMPONENT_MAP = {}
@@ -148,6 +150,13 @@ class Document extends EventTarget {
     get $$notNeedPrefix() {
         if (!this.$_config) this.$_config = cache.getConfig()
         return this.$_config && this.$_config.runtime && this.$_config.runtime.wxComponent === 'noprefix'
+    }
+
+    /**
+     * 设置页面显示状态
+     */
+    set $$visibilityState(value) {
+        this.$_visibilityState = value
     }
 
     /**
@@ -275,6 +284,14 @@ class Document extends EventTarget {
         if (!value || typeof value !== 'string') return
 
         this.$_cookie.setCookie(value, this.URL)
+    }
+
+    get visibilityState() {
+        return this.$_visibilityState
+    }
+
+    get hidden() {
+        return this.$_visibilityState === 'visible'
     }
 
     getElementById(id) {

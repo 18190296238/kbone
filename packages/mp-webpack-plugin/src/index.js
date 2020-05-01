@@ -36,6 +36,7 @@ const globalVars = [
     'requestAnimationFrame',
     'cancelAnimationFrame',
     'getComputedStyle',
+    'XMLHttpRequest',
 ]
 
 /**
@@ -56,7 +57,7 @@ function wrapChunks(compilation, chunks, globalVarsConfig) {
         chunk.files.forEach(fileName => {
             if (ModuleFilenameHelpers.matchObject({test: /\.js$/}, fileName)) {
                 // 页面 js
-                const headerContent = 'module.exports = function(window, document) {const App = function(options) {window.appOptions = options};' + globalVars.map(item => `var ${item} = window.${item}`).join(';') + ';'
+                const headerContent = 'module.exports = function(window, document) {var App = function(options) {window.appOptions = options};' + globalVars.map(item => `var ${item} = window.${item}`).join(';') + ';'
                 let customHeaderContent = globalVarsConfig.map(item => `var ${item[0]} = ${item[1] ? item[1] : 'window[\'' + item[0] + '\']'}`).join(';')
                 customHeaderContent = customHeaderContent ? customHeaderContent + ';' : ''
                 const footerContent = '}'
@@ -102,6 +103,7 @@ class MpPlugin {
             const assetsReverseMap = {} // 依赖-页面名
             const assetsSubpackageMap = {} // 依赖-分包名
             const tabBarMap = {}
+            let needEmitConfigToSubpackage = false // 是否输出 config.js 到分包内
 
             // 收集依赖
             for (const entryName of entryNames) {
@@ -147,7 +149,7 @@ class MpPlugin {
                     if (assets) {
                         [...assets.js, ...assets.css].forEach(filePath => {
                             const requirePages = assetsReverseMap[filePath] || []
-                            if (_.includes(pages, requirePages)) {
+                            if (_.includes(pages, requirePages) && compilation.assets[filePath]) {
                                 // 该依赖为分包内页面私有
                                 assetsSubpackageMap[filePath] = packageName
                                 compilation.assets[`../${packageName}/common/${filePath}`] = compilation.assets[filePath]
@@ -171,6 +173,11 @@ class MpPlugin {
                 }
             })
 
+            if (generateConfig.app === 'noemit') {
+                // generate.app 值为 noemit 且只有分包输出时，将 config.js 输出到分包内
+                needEmitConfigToSubpackage = !entryNames.find(entryName => !subpackagesMap[entryName])
+            }
+
             // 处理各个入口页面
             for (const entryName of entryNames) {
                 const assets = assetsMap[entryName]
@@ -185,7 +192,7 @@ class MpPlugin {
                 const pageExtraConfig = pageConfig && pageConfig.extra || {}
                 const packageName = subpackagesMap[entryName]
                 const pageRoute = `${packageName ? packageName + '/' : ''}pages/${entryName}/index`
-                const assetPathPrefix = packageName ? '../' : ''
+                const assetPathPrefix = packageName && !needEmitConfigToSubpackage ? '../' : ''
 
                 // 页面 js
                 let pageJsContent = pageJsTmpl
@@ -259,7 +266,7 @@ class MpPlugin {
                 // app js
                 const appAssets = assetsMap[appJsEntryName] || {js: [], css: []}
                 const appJsContent = appJsTmpl
-                    .replace('/* INIT_FUNCTION */', `const fakeWindow = {};const fakeDocument = {};${appAssets.js.map(js => 'require(\'' + getAssetPath('', js, assetsSubpackageMap, '') + '\')(fakeWindow, fakeDocument);').join('')}const appConfig = fakeWindow.appOptions || {};`)
+                    .replace('/* INIT_FUNCTION */', `var fakeWindow = {};var fakeDocument = {};${appAssets.js.map(js => 'require(\'' + getAssetPath('', js, assetsSubpackageMap, '') + '\')(fakeWindow, fakeDocument);').join('')}var appConfig = fakeWindow.appOptions || {};`)
                 addFile(compilation, '../app.js', appJsContent)
 
                 // app wxss
@@ -383,7 +390,13 @@ class MpPlugin {
                 redirect: options.redirect || {},
                 optimization: options.optimization || {},
             }, null, '\t')
-            addFile(compilation, '../config.js', configJsContent)
+            if (needEmitConfigToSubpackage) {
+                Object.keys(subpackagesConfig).forEach(packageName => {
+                    addFile(compilation, `../${packageName}/config.js`, configJsContent)
+                })
+            } else {
+                addFile(compilation, '../config.js', configJsContent)
+            }
 
             // package.json
             const userPackageConfigJson = options.packageConfig || {}
@@ -439,18 +452,22 @@ class MpPlugin {
             }
         })
 
-        const hasBuiltNpm = false
+        let hasBuiltNpm = false
         compiler.hooks.done.tapAsync(PluginName, (stats, callback) => {
             // 处理自动安装小程序依赖
             const autoBuildNpm = generateConfig.autoBuildNpm || false
             const distDir = path.dirname(stats.compilation.outputOptions.path)
 
-            if (hasBuiltNpm || !autoBuildNpm) return callback()
+            hasBuiltNpm = _.isFileExisted(path.resolve(distDir, './node_modules/miniprogram-element/package.json')) && _.isFileExisted(path.resolve(distDir, './node_modules/miniprogram-render/package.json'))
+
+            if (hasBuiltNpm || !autoBuildNpm) {
+                if (hasBuiltNpm) console.log(colors.bold('\ndependencies has been built\n'))
+                return callback()
+            }
 
             const build = () => {
-                ['miniprogram-element', 'miniprogram-render'].forEach(name => {
-                    _.copyDir(path.resolve(distDir, `./node_modules/${name}/src`), path.resolve(distDir, `./miniprogram_npm/${name}`))
-                })
+                _.copyDir(path.resolve(distDir, './node_modules/miniprogram-element/src'), path.resolve(distDir, './miniprogram_npm/miniprogram-element'))
+                _.copyDir(path.resolve(distDir, './node_modules/miniprogram-render/src'), path.resolve(distDir, './miniprogram_npm/miniprogram-render'))
                 callback()
             }
             console.log(colors.bold('\nstart building dependencies...\n'))

@@ -33,6 +33,7 @@
 * 监听小程序页面生命周期
 * 监听小程序 app 生命周期
 * cookie 存储在内存中
+* 页面分享
 
 ## demo7
 
@@ -92,3 +93,20 @@
 
 * vue
 * echarts
+
+## demo21
+
+* vue
+* 多页
+* 分包
+* 混合到原生小程序中
+
+## demo22
+
+* vue
+* 多页
+* 页面跳转
+* 跨页面通信
+* 跨页面数据共享
+* localStorage
+* sessionStorage

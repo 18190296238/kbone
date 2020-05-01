@@ -4,14 +4,13 @@ const Event = require('./event/event')
 const OriginalCustomEvent = require('./event/custom-event')
 const Location = require('./bom/location')
 const Navigator = require('./bom/navigator')
-const cache = require('./util/cache')
-const tool = require('./util/tool')
 const Screen = require('./bom/screen')
 const History = require('./bom/history')
 const Miniprogram = require('./bom/miniprogram')
 const LocalStorage = require('./bom/local-storage')
 const SessionStorage = require('./bom/session-storage')
 const Performance = require('./bom/performance')
+const OriginalXMLHttpRequest = require('./bom/xml-http-request')
 const Node = require('./node/node')
 const Element = require('./node/element')
 const TextNode = require('./node/text-node')
@@ -19,6 +18,8 @@ const Comment = require('./node/comment')
 const ClassList = require('./node/class-list')
 const Style = require('./node/style')
 const Attribute = require('./node/attribute')
+const cache = require('./util/cache')
+const tool = require('./util/tool')
 
 let lastRafTime = 0
 const WINDOW_PROTOTYPE_MAP = {
@@ -36,12 +37,15 @@ const ELEMENT_PROTOTYPE_MAP = {
     classList: ClassList.prototype,
     style: Style.prototype,
 }
+const subscribeMap = {}
+const globalObject = {}
 
 class Window extends EventTarget {
     constructor(pageId) {
         super()
 
         const timeOrigin = +new Date()
+        const that = this
 
         this.$_pageId = pageId
 
@@ -74,6 +78,11 @@ class Window extends EventTarget {
             constructor(name = '', options = {}) {
                 options.timeStamp = +new Date() - timeOrigin
                 super(name, options)
+            }
+        }
+        this.$_xmlHttpRequestConstructor = class XMLHttpRequest extends OriginalXMLHttpRequest {
+            constructor() {
+                super(that)
             }
         }
 
@@ -180,6 +189,27 @@ class Window extends EventTarget {
      */
     get $$miniprogram() {
         return this.$_miniprogram
+    }
+
+    /**
+     * 获取全局共享对象
+     */
+    get $$global() {
+        return globalObject
+    }
+
+    /**
+     * 销毁实例
+     */
+    $$destroy() {
+        super.$$destroy()
+
+        const pageId = this.$_pageId
+
+        Object.keys(subscribeMap).forEach(name => {
+            const handlersMap = subscribeMap[name]
+            if (handlersMap[pageId]) handlersMap[pageId] = null
+        })
     }
 
     /**
@@ -376,6 +406,58 @@ class Window extends EventTarget {
     }
 
     /**
+     * 订阅广播事件
+     */
+    $$subscribe(name, handler) {
+        if (typeof name !== 'string' || typeof handler !== 'function') return
+
+        const pageId = this.$_pageId
+        subscribeMap[name] = subscribeMap[name] || {}
+        subscribeMap[name][pageId] = subscribeMap[name][pageId] || []
+        subscribeMap[name][pageId].push(handler)
+    }
+
+    /**
+     * 取消订阅广播事件
+     */
+    $$unsubscribe(name, handler) {
+        const pageId = this.$_pageId
+
+        if (typeof name !== 'string' || !subscribeMap[name] || !subscribeMap[name][pageId]) return
+
+        const handlers = subscribeMap[name][pageId]
+        if (!handler) {
+            // 取消所有 handler 的订阅
+            handlers.length = 0
+        } else if (typeof handler === 'function') {
+            const index = handlers.indexOf(handler)
+            if (index !== -1) handlers.splice(index, 1)
+        }
+    }
+
+    /**
+     * 发布广播事件
+     */
+    $$publish(name, data) {
+        if (typeof name !== 'string' || !subscribeMap[name]) return
+
+        Object.keys(subscribeMap[name]).forEach(pageId => {
+            const handlers = subscribeMap[name][pageId]
+            if (handlers && handlers.length) {
+                handlers.forEach(handler => {
+                    if (typeof handler !== 'function') return
+
+                    try {
+                        handler.call(null, data)
+                    } catch (err) {
+                        console.error(err)
+                    }
+                })
+            }
+        })
+    }
+
+    /**
      * 对外属性和方法
      */
     get document() {
@@ -516,9 +598,19 @@ class Window extends EventTarget {
         return function() {}
     }
 
+    get XMLHttpRequest() {
+        return this.$_xmlHttpRequestConstructor
+    }
+
     open(url) {
         // 不支持 windowName 和 windowFeatures
         this.location.$$open(url)
+    }
+
+    close() {
+        wx.navigateBack({
+            delta: 1,
+        })
     }
 
     getComputedStyle() {

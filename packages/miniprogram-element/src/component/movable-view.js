@@ -19,11 +19,13 @@ module.exports = {
         },
     }, {
         name: 'x',
+        canBeUserChanged: true,
         get(domNode) {
             return +domNode.getAttribute('x') || 0
         },
     }, {
         name: 'y',
+        canBeUserChanged: true,
         get(domNode) {
             return +domNode.getAttribute('y') || 0
         },
@@ -46,6 +48,7 @@ module.exports = {
         },
     }, {
         name: 'scale',
+        canBeUserChanged: true,
         get(domNode) {
             return !!domNode.getAttribute('scale')
         },
@@ -81,7 +84,13 @@ module.exports = {
 
             domNode.$$setAttributeWithoutUpdate('x', evt.detail.x)
             domNode.$$setAttributeWithoutUpdate('y', evt.detail.y)
-            this.callSimpleEvent('change', evt, domNode)
+
+            // 可被用户行为改变的值，需要记录
+            domNode._oldValues = domNode._oldValues || {}
+            domNode._oldValues.x = evt.detail.x
+            domNode._oldValues.y = evt.detail.y
+
+            this.callSingleEvent('change', evt)
         },
 
         onMovableViewScale(evt) {
@@ -91,21 +100,22 @@ module.exports = {
             domNode.$$setAttributeWithoutUpdate('x', evt.detail.x)
             domNode.$$setAttributeWithoutUpdate('y', evt.detail.y)
             domNode.$$setAttributeWithoutUpdate('scale-value', evt.detail.scale)
-            this.callSimpleEvent('scale', evt, domNode)
+
+            // 可被用户行为改变的值，需要记录
+            domNode._oldValues = domNode._oldValues || {}
+            domNode._oldValues.x = evt.detail.x
+            domNode._oldValues.y = evt.detail.y
+            domNode._oldValues.scaleValue = evt.detail.scale
+
+            this.callSingleEvent('scale', evt)
         },
 
         onMovableViewHtouchmove(evt) {
-            const domNode = this.getDomNodeFromEvt(evt)
-            if (!domNode) return
-
-            this.callSimpleEvent('htouchmove', evt, domNode)
+            this.callSingleEvent('htouchmove', evt)
         },
 
         onMovableViewVtouchmove(evt) {
-            const domNode = this.getDomNodeFromEvt(evt)
-            if (!domNode) return
-
-            this.callSimpleEvent('vtouchmove', evt, domNode)
+            this.callSingleEvent('vtouchmove', evt)
         },
     },
 }

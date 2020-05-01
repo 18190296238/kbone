@@ -1,5 +1,88 @@
 # 更新日志
 
+## 1.2.12
+
+* 修复 picker 子节点更新失败问题
+
+## 1.2.10
+
+* 补充 map 的 regionchange 事件中的 causedBy 字段
+
+## 1.2.9
+
+* map 的部分字段支持传入 json 串，以兼容 react
+
+## 1.2.8
+
+* 兼容基础库中 button 组件设置 type 默认值引入的样式优先级问题
+
+## 1.2.6
+
+* 兼容 canvas touch 相关事件小程序基础库没有提供 currentTarget 的问题
+
+## 1.2.4
+
+* 支持 scroll-view 下拉刷新相关属性
+
+## 1.2.3
+
+* 兼容旧版本基础库使用不存在的 behavior 会报 _unprepared 的问题
+
+## 1.2.2
+
+* scroll-view 的 scroll 事件补充捕获阶段
+
+## 1.2.1
+
+* 支持获取 formId
+* 修复 form 表单多次 reset 不生效问题
+
+## 1.2.0
+
+* 支持跨页面通信
+* 支持跨页面数据共享
+
+## 1.1.9
+
+* 支持对内置组件中可被用户行为改变的值进行强制更新
+
+## 1.1.7
+
+* 修复简单事件丢失 touches 等字段的问题
+
+## 1.1.6
+
+* picker 的 range 字段支持传入 json 串，以兼容 react
+
+## 1.1.5
+
+* 兼容开发者工具 map 组件相关事件的 detail 对象为空的问题
+
+## 1.1.2
+
+* 修复内置组件监听事件进行状态同步时调用 setAttribute 会触发 setData 的问题
+
+## 1.1.1
+
+* 所有节点均支持通过 _wxComponent 属性获取对应的自定义组件实例
+
+## 1.1.0
+
+* 支持 wx-capture、wx-catch 和 wx-animation 三种特殊节点
+* 内置组件中不可冒泡事件均取消捕获阶段
+
+## 1.0.9
+
+* 修复内置组件 hasChildren 判断条件
+
+## 1.0.5
+
+* 调整 $$domInfo 对象的 class 为 className
+
+## 1.0.4
+
+* 兼容 react 中 picker-view 设置数组到 value 中会被序列化字符串的问题
+
 ## 1.0.1
 
 * 调整 picker-view 为 0.x 版本的渲染模式

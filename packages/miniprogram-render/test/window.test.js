@@ -7,6 +7,7 @@ const LocalStorage = require('../src/bom/local-storage')
 const SessionStorage = require('../src/bom/session-storage')
 const History = require('../src/bom/history')
 const Screen = require('../src/bom/screen')
+const XMLHttpRequest = require('../src/bom/xml-http-request')
 const CustomEvent = require('../src/event/custom-event')
 const Event = require('../src/event/event')
 const Element = require('../src/node/element')
@@ -334,6 +335,104 @@ test('window: $$getPrototype/$$extend/$$addAspect', () => {
     expect(element.hasChildNodes).toBe(originalFunc)
 })
 
+test('window: $$subscribe/$$unsubscribe/$$publish', () => {
+    const res2 = mock.createPage('list')
+    const window2 = res2.window
+    const res3 = mock.createPage('detail')
+    const window3 = res3.window
+
+    const data1 = []
+    const data2 = []
+    const data3 = []
+
+    const handler1 = data => data1.push(data)
+    const handler2a = data => data2.push(data)
+    const handler2b = data => data2.push(data)
+    const handler3 = data => data3.push(data)
+
+    // 订阅发布
+    window.$$subscribe('evt1', handler1)
+    window2.$$subscribe('evt1', handler2a)
+    window2.$$subscribe('evt1', handler2b)
+    window3.$$publish('evt1', '123')
+    window3.$$publish('evt1', {a: 321})
+    expect(data1).toEqual(['123', {a: 321}])
+    expect(data2).toEqual(['123', '123', {a: 321}, {a: 321}])
+    expect(data3).toEqual([])
+    window3.$$subscribe('evt1', handler3)
+    window.$$publish('evt1', 'hoho')
+    window.$$publish('evt2', 'juju')
+    expect(data1).toEqual(['123', {a: 321}, 'hoho'])
+    expect(data2).toEqual(['123', '123', {a: 321}, {a: 321}, 'hoho', 'hoho'])
+    expect(data3).toEqual(['hoho'])
+
+    // 取消订阅
+    data1.length = 0
+    data2.length = 0
+    data3.length = 0
+    window.$$subscribe('evt2', handler1)
+    window2.$$subscribe('evt2', handler2a)
+    window2.$$subscribe('evt2', handler2b)
+    window3.$$subscribe('evt2', handler3)
+    window.$$unsubscribe('evt1', handler1)
+    window2.$$unsubscribe('evt1', handler2a)
+    window3.$$publish('evt1', 'haha')
+    window3.$$publish('evt2', '321')
+    expect(data1).toEqual(['321'])
+    expect(data2).toEqual(['haha', '321', '321'])
+    expect(data3).toEqual(['haha', '321'])
+    window2.$$subscribe('evt1', handler2a)
+    window3.$$publish('evt1', 'aaa')
+    window2.$$unsubscribe('evt1')
+    window3.$$publish('evt1', '111')
+    window3.$$publish('evt2', '222')
+    expect(data1).toEqual(['321', '222'])
+    expect(data2).toEqual(['haha', '321', '321', 'aaa', 'aaa', '222', '222'])
+    expect(data3).toEqual(['haha', '321', 'aaa', '111', '222'])
+
+    // 销毁 window 实例
+    data1.length = 0
+    data2.length = 0
+    data3.length = 0
+    window.$$subscribe('evt3', handler1)
+    window2.$$subscribe('evt3', handler2a)
+    window2.$$subscribe('evt3', handler2b)
+    window3.$$subscribe('evt3', handler3)
+    window.$$subscribe('evt4', handler1)
+    window2.$$subscribe('evt4', handler2a)
+    window2.$$subscribe('evt4', handler2b)
+    window3.$$subscribe('evt4', handler3)
+    window3.$$publish('evt3', '111')
+    window3.$$publish('evt4', '222')
+    expect(data1).toEqual(['111', '222'])
+    expect(data2).toEqual(['111', '111', '222', '222'])
+    expect(data3).toEqual(['111', '222'])
+    window2.$$destroy()
+    window3.$$destroy()
+    window3.$$publish('evt3', '333')
+    window3.$$publish('evt4', '444')
+    expect(data1).toEqual(['111', '222', '333', '444'])
+    expect(data2).toEqual(['111', '111', '222', '222'])
+    expect(data3).toEqual(['111', '222'])
+})
+
+test('window: $$global', () => {
+    const res2 = mock.createPage('list')
+    const window2 = res2.window
+    const res3 = mock.createPage('detail')
+    const window3 = res3.window
+
+    window.$$global.aaa = '123'
+    expect(window.$$global.aaa).toBe('123')
+    expect(window2.$$global.aaa).toBe('123')
+    expect(window3.$$global.aaa).toBe('123')
+
+    window.$$global.bbb = {num: '123'}
+    expect(window.$$global.bbb).toEqual({num: '123'})
+    expect(window2.$$global.bbb).toEqual({num: '123'})
+    expect(window3.$$global.bbb).toEqual({num: '123'})
+})
+
 test('window: document', () => {
     expect(window.document).toBe(document)
     expect(window.document).toBeInstanceOf(Document)
@@ -341,8 +440,6 @@ test('window: document', () => {
 
 test('window: location', () => {
     expect(window.location).toBeInstanceOf(Location)
-
-    // TODO setter
 })
 
 test('window: navigator', () => {
@@ -413,7 +510,13 @@ test('window: setTimeout/clearTimeout/setInterval/clearInterval', async() => {
 })
 
 test('window: HTMLElement', () => {
-    // TODO
+    const htmlElement = new window.HTMLElement({
+        tagName: 'div',
+        attrs: {},
+        nodeId: 'test',
+        type: Node.ELEMENT_NODE,
+    }, document.$_tree)
+    expect(htmlElement).toBeInstanceOf(Element)
 })
 
 test('window: Element', () => {
@@ -434,6 +537,11 @@ test('window: RegExp/Math/Number/Boolean/String/Date/Symbol/parseInt/parseFloat'
     expect(window.Symbol).toBe(Symbol)
     expect(window.parseInt).toBe(parseInt)
     expect(window.parseFloat).toBe(parseFloat)
+})
+
+test('window: XMLHttpRequest', () => {
+    const xmlHttpRequest = new window.XMLHttpRequest()
+    expect(xmlHttpRequest).toBeInstanceOf(XMLHttpRequest)
 })
 
 test('window: open', () => {
@@ -487,7 +595,7 @@ test('window: open', () => {
 })
 
 test('window: getComputedStyle', () => {
-    // TODO
+    // not supported
 })
 
 test('window: requestAnimationFrame/cancelAnimationFrame', async() => {
